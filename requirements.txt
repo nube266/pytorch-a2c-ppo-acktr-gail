@@ -3,3 +3,4 @@ matplotlib
 pybullet
 stable-baselines3
 gym[atari]
+h5py

@@ -62,7 +62,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Install requirements.txt
-ADD . /tmp
-RUN pip3 install -r /tmp/requirements.txt
+ADD ./requirements.txt /tmp/requirements.txt
+RUN /bin/bash -c ". activate habitat; pip3 install -r /tmp/requirements.txt"
 
 WORKDIR /root/home/code
