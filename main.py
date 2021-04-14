@@ -21,32 +21,45 @@ from evaluation import evaluate
 
 
 def main():
+    # 引数の読み取り
     args = get_args()
 
+    # 乱数のシード値を決定
     torch.manual_seed(args.seed)
     torch.cuda.manual_seed_all(args.seed)
 
+    # cudaの設定(trueの場合決定論的振る舞いをする-つまりlossの値がばらつかなくなる)
+    # ただし、arguments.pyで以下のように記されている
+    # Sets flags for determinism when using CUDA (potentially slow!)
     if args.cuda and torch.cuda.is_available() and args.cuda_deterministic:
         torch.backends.cudnn.benchmark = False
         torch.backends.cudnn.deterministic = True
 
+    # logファイルの出力先を決定
     log_dir = os.path.expanduser(args.log_dir)
     eval_log_dir = log_dir + "_eval"
     utils.cleanup_log_dir(log_dir)
     utils.cleanup_log_dir(eval_log_dir)
 
+    # スレッド数の決定
     torch.set_num_threads(1)
+
+    # deviceの設定
     device = torch.device("cuda:0" if args.cuda else "cpu")
 
+    # 環境の初期化
     envs = make_vec_envs(args.env_name, args.seed, args.num_processes,
                          args.gamma, args.log_dir, device, False)
 
+    # ポリシーの設定
     actor_critic = Policy(
         envs.observation_space.shape,
         envs.action_space,
         base_kwargs={'recurrent': args.recurrent_policy})
+    # to(device) デバイスの設定: GPU or CPU
     actor_critic.to(device)
 
+    # アルゴリズムの選択
     if args.algo == 'a2c':
         agent = algo.A2C_ACKTR(
             actor_critic,
@@ -70,7 +83,6 @@ def main():
     elif args.algo == 'acktr':
         agent = algo.A2C_ACKTR(
             actor_critic, args.value_loss_coef, args.entropy_coef, acktr=True)
-
     if args.gail:
         assert len(envs.observation_space.shape) == 1
         discr = gail.Discriminator(
@@ -79,7 +91,6 @@ def main():
         file_name = os.path.join(
             args.gail_experts_dir, "trajs_{}.pt".format(
                 args.env_name.split('-')[0].lower()))
-        
         expert_dataset = gail.ExpertDataset(
             file_name, num_trajectories=4, subsample_frequency=20)
         drop_last = len(expert_dataset) > args.gail_batch_size
@@ -89,27 +100,32 @@ def main():
             shuffle=True,
             drop_last=drop_last)
 
+    # Rollout(報酬の評価)の初期化
     rollouts = RolloutStorage(args.num_steps, args.num_processes,
                               envs.observation_space.shape, envs.action_space,
                               actor_critic.recurrent_hidden_state_size)
 
+    # 環境の初期化
     obs = envs.reset()
     rollouts.obs[0].copy_(obs)
     rollouts.to(device)
 
+    # 報酬の定義
     episode_rewards = deque(maxlen=10)
 
+    # 開始時刻とパラメータを更新する回数?を設定
     start = time.time()
-    num_updates = int(
-        args.num_env_steps) // args.num_steps // args.num_processes
+    num_updates = int(args.num_env_steps) // args.num_steps // args.num_processes
     for j in range(num_updates):
 
+        # 学習率にリニアな線形スケジュールを使用する場合
         if args.use_linear_lr_decay:
             # decrease learning rate linearly
             utils.update_linear_schedule(
                 agent.optimizer, j, num_updates,
                 agent.optimizer.lr if args.algo == "acktr" else args.lr)
 
+        # アクションの
         for step in range(args.num_steps):
             # Sample actions
             with torch.no_grad():
