@@ -52,7 +52,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Install pytorch
-RUN conda install pytorch==1.6.0 torchvision=0.7.0 cudatoolkit=10.2.89 -c pytorch
+RUN conda install pytorch torchvision -c soumith
 
 # Install OpenGL related libraries
 RUN apt-get update && apt-get install -y --no-install-recommends \
